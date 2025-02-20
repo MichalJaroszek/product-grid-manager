@@ -98,14 +98,29 @@ function App() {
   const handleProductsReorder = useCallback((newProducts) => {
     if (!selectedNode) return;
 
-    setModifiedNodes(prev => new Set([...prev, selectedNode]));
+    setModifiedNodes(prev => {
+      const newNodes = new Set([...prev, selectedNode]);
+      if (selectedNode === 'SKLEP') {
+        newNodes.add('SKLEP\\Zobacz Wszystko');
+      } else if (selectedNode === 'SKLEP\\Zobacz Wszystko') {
+        newNodes.add('SKLEP');
+      }
+      return newNodes;
+    });
 
     const newFilteredProducts = newProducts.map((product, index) => ({
       ...product,
-      menuItems: product.menuItems.map(item => ({
-        ...item,
-        level: item.textId === selectedNode ? index + 1 : item.level
-      }))
+      menuItems: product.menuItems.map(item => {
+        if (item.textId === selectedNode || 
+           (selectedNode === 'SKLEP' && item.textId === 'SKLEP\\Zobacz Wszystko') ||
+           (selectedNode === 'SKLEP\\Zobacz Wszystko' && item.textId === 'SKLEP')) {
+          return {
+            ...item,
+            level: index + 1
+          };
+        }
+        return item;
+      })
     }));
 
     setFilteredProducts(newFilteredProducts);

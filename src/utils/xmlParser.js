@@ -55,12 +55,35 @@ const extractMenuItems = (product) => {
   try {
     const navigation = product['iaiext:navigation'];
     const items = navigation?.['iaiext:site']?.['iaiext:menu']?.[0]?.['iaiext:item'] || [];
-    return items.map(item => ({
-      textId: item.textid,
-      name: item.name || item.textid,
-      level: parseInt(item['iaiext:priority_menu']) || 0
-    }));
-  } catch {
+    
+    // Dodajemy filtrowanie aby upewnić się, że mamy wszystkie węzły
+    return items
+      .filter(item => item.textid) // upewniamy się że item ma textid
+      .map(item => {
+        // Wyciągamy zarówno pełną ścieżkę jak i sam węzeł
+        const pathParts = item.textid.split('\\');
+        const items = [];
+        
+        // Dodajemy każdy poziom ścieżki jako osobny item
+        let currentPath = '';
+        pathParts.forEach((part, index) => {
+          currentPath = currentPath ? `${currentPath}\\${part}` : part;
+          items.push({
+            textId: currentPath,
+            name: currentPath,
+            level: parseInt(item['iaiext:priority_menu']) || 0
+          });
+        });
+        
+        return items;
+      })
+      .flat() // spłaszczamy tablicę
+      .filter((item, index, self) => 
+        // Usuwamy duplikaty
+        index === self.findIndex(t => t.textId === item.textId)
+      );
+  } catch (error) {
+    console.error('Błąd podczas ekstrakcji menu items:', error);
     return [];
   }
 }; 
