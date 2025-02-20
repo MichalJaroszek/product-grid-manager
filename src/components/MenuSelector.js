@@ -2,60 +2,77 @@ import React from 'react';
 import styled from '@emotion/styled';
 
 const MenuContainer = styled.div`
-  border: 1px solid #ddd;
+  margin: 0;
+  padding: 15px;
+  border: 1px solid #e0e0e0;
   border-radius: 4px;
-  overflow: hidden;
+  background: white;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+`;
+
+const MenuTitle = styled.h2`
+  margin: 0 0 15px 0;
+  font-size: 16px;
+  font-weight: 500;
+  color: #000000;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 `;
 
 const MenuList = styled.div`
   display: flex;
   flex-direction: column;
+  gap: 8px;
 `;
 
-const MenuItem = styled.button`
-  padding: 12px 15px;
-  background: ${props => props.active ? '#4CAF50' : 'white'};
-  color: ${props => props.active ? 'white' : '#333'};
-  border: none;
-  border-bottom: 1px solid #ddd;
+const MenuItemStyled = styled.div`
+  padding: 10px;
   cursor: pointer;
-  text-align: left;
-  transition: all 0.2s;
-
-  &:last-child {
-    border-bottom: none;
-  }
-
+  background-color: ${props => props.selected ? '#f5f5f5' : 'white'};
+  border-radius: 4px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 14px;
+  color: ${props => props.selected ? '#000000' : '#333333'};
+  border: 1px solid ${props => props.selected ? '#000000' : '#e0e0e0'};
+  transition: all 0.2s ease;
+  
   &:hover {
-    background: ${props => props.active ? '#45a049' : '#f5f5f5'};
+    background-color: ${props => props.selected ? '#f5f5f5' : '#f8f8f8'};
+    border-color: ${props => props.selected ? '#000000' : '#cccccc'};
   }
 `;
 
-const MenuTitle = styled.div`
-  padding: 15px;
-  background: #f5f5f5;
-  border-bottom: 1px solid #ddd;
-  font-weight: bold;
-  color: #333;
-`;
+const MenuItem = React.memo(({ node, isActive, onSelect }) => (
+  <MenuItemStyled
+    selected={isActive}
+    onClick={() => onSelect(node.name)}
+  >
+    {node.name}
+  </MenuItemStyled>
+));
 
-function MenuSelector({ nodes, onSelect, activeNode }) {
+function MenuSelector({ nodes, activeNode, onSelect }) {
+  const uniqueNodes = React.useMemo(() => 
+    nodes?.map((node, index) => ({
+      id: `${node}-${index}`,
+      name: node
+    })) || []
+  , [nodes]);
+
   return (
     <MenuContainer>
-      <MenuTitle>Kategorie produktów</MenuTitle>
+      <MenuTitle>Menu</MenuTitle>
       <MenuList>
-        {nodes.map(node => (
+        {uniqueNodes.map(node => (
           <MenuItem
-            key={node}
-            active={node === activeNode}
-            onClick={() => onSelect(node)}
-          >
-            {node}
-          </MenuItem>
+            key={node.id}
+            node={node}
+            isActive={node.name === activeNode}
+            onSelect={onSelect}
+          />
         ))}
       </MenuList>
     </MenuContainer>
   );
 }
 
-export default MenuSelector; 
+export default React.memo(MenuSelector); 

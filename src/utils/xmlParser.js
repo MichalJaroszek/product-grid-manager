@@ -6,54 +6,61 @@ export const parseXMLFile = async (source, isText = false) => {
     if (isText) {
       xmlText = source;
     } else {
-      console.log('Rozpoczynam pobieranie pliku XML...');
-      const response = await fetch(`/${source}`);
-      console.log('Plik pobrany, status:', response.status);
+      const response = await fetch(source);
       xmlText = await response.text();
     }
 
-    const parser = new XMLParser({
+    const options = {
+      attributeNamePrefix: "",
       ignoreAttributes: false,
-      attributeNamePrefix: '',
-      parseAttributeValue: true,
-      preserveOrder: false,
-      trimValues: true,
-      parseTagValue: true,
       allowBooleanAttributes: true,
-      cdataPropName: '__cdata',
-      ignoreDeclaration: true
-    });
-    
+      parseAttributeValue: false,
+      trimValues: true,
+      processEntities: false,
+      isArray: (name) => ['product', 'iaiext:item'].includes(name)
+    };
+
+    const parser = new XMLParser(options);
     const result = parser.parse(xmlText);
-    console.log('Sparsowany XML:', result);
 
-    // Dostęp do produktów
-    const productsArray = Array.isArray(result.offer.products.product) 
-      ? result.offer.products.product 
-      : [result.offer.products.product];
+    if (!result?.offer?.products?.product) {
+      throw new Error('Nieprawidłowa struktura pliku XML');
+    }
 
-    console.log('Tablica produktów:', productsArray);
+    // Wyciągamy tylko potrzebne dane i zachowujemy oryginalny XML
+    const products = result.offer.products.product
+      .map(product => ({
+        id: product.id,
+        iconUrl: product.images?.icons?.icon?.url,
+        codeOnCard: product.code_on_card,
+        menuItems: extractMenuItems(product),
+        originalData: product,
+        __originalXML: xmlText // Dodajemy oryginalny XML do każdego produktu
+      }))
+      .filter(product => product.menuItems.length > 0);
 
-    // Przetwórz dane XML na format potrzebny aplikacji
-    const products = productsArray.map(product => ({
-      id: product.id,
-      iconUrl: product.images?.icons?.icon?.url,
-      menuItems: Array.isArray(product['iaiext:priority_menu']?.site?.menu?.item)
-        ? product['iaiext:priority_menu'].site.menu.item
-        : [product['iaiext:priority_menu']?.site?.menu?.item],
-      originalData: product
-    }));
-
-    // Zbierz unikalne węzły menu
     const menuNodes = [...new Set(
-      products.flatMap(product => 
-        product.menuItems.map(item => item.textId)
-      )
-    )];
+      products.flatMap(p => p.menuItems.map(i => i.textId))
+    )].filter(Boolean).sort();
 
     return { products, menuNodes };
   } catch (error) {
     console.error('Błąd podczas parsowania XML:', error);
     throw error;
+  }
+};
+
+// Wydzielona funkcja do ekstrakcji menu items
+const extractMenuItems = (product) => {
+  try {
+    const navigation = product['iaiext:navigation'];
+    const items = navigation?.['iaiext:site']?.['iaiext:menu']?.[0]?.['iaiext:item'] || [];
+    return items.map(item => ({
+      textId: item.textid,
+      name: item.name || item.textid,
+      level: parseInt(item['iaiext:priority_menu']) || 0
+    }));
+  } catch {
+    return [];
   }
 }; 

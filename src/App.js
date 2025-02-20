@@ -1,17 +1,18 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import styled from '@emotion/styled';
 import { parseXMLFile } from './utils/xmlParser';
 import ProductGrid from './components/ProductGrid';
 import MenuSelector from './components/MenuSelector';
-import { fetchProductsFromShop, updateProductPriorities } from './utils/idoSellAPI';
+import { generateNewXML } from './utils/xmlGenerator';
 
 const AppContainer = styled.div`
   padding: 20px;
   max-width: 1400px;
   margin: 0 auto;
   display: grid;
-  grid-template-columns: 250px 1fr;
+  grid-template-columns: 280px 1fr;
   gap: 20px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 `;
 
 const SidebarContainer = styled.div`
@@ -25,17 +26,20 @@ const MainContent = styled.div`
 `;
 
 const ActionButton = styled.button`
-  padding: 10px 20px;
-  background-color: ${props => props.variant === 'primary' ? '#4CAF50' : '#2196F3'};
+  padding: 12px 20px;
+  background-color: ${props => props.variant === 'primary' ? '#000000' : '#333333'};
   color: white;
   border: none;
   border-radius: 4px;
   cursor: pointer;
   width: 100%;
-  transition: background-color 0.2s;
+  transition: all 0.2s ease;
+  font-size: 14px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-weight: 500;
 
   &:hover {
-    background-color: ${props => props.variant === 'primary' ? '#45a049' : '#1976D2'};
+    background-color: ${props => props.variant === 'primary' ? '#333333' : '#000000'};
   }
 
   &:disabled {
@@ -44,147 +48,180 @@ const ActionButton = styled.button`
   }
 `;
 
+const FileInput = styled.input`
+  display: none;
+`;
+
 function App() {
-  const [products, setProducts] = useState([]);
-  const [menuNodes, setMenuNodes] = useState([]);
+  const [nodes, setNodes] = useState([]);
   const [selectedNode, setSelectedNode] = useState(null);
   const [filteredProducts, setFilteredProducts] = useState([]);
-  const [shopConfig, setShopConfig] = useState(() => {
-    const saved = localStorage.getItem('shopConfig');
-    return saved ? JSON.parse(saved) : null;
-  });
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [modifiedProducts, setModifiedProducts] = useState([]);
+  const [modifiedNodes, setModifiedNodes] = useState(new Set());
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
-    if (shopConfig) {
-      loadProductsFromShop();
-    }
-  }, [shopConfig]);
+    console.log('App mounted, loading XML file...');
+    loadXMLFile();
+  }, []);
 
-  const loadProductsFromShop = async () => {
-    try {
-      console.log('Rozpoczynam ładowanie produktów ze sklepu...');
-      const xmlData = await fetchProductsFromShop(shopConfig);
-      const result = await parseXMLFile(xmlData, true);
-      setProducts(result.products);
-      setMenuNodes(result.menuNodes);
-    } catch (error) {
-      console.error('Błąd podczas wczytywania produktów:', error);
-      alert('Wystąpił błąd podczas wczytywania produktów. Sprawdź konsolę po więcej szczegółów.');
+  const loadXMLFile = async () => {
+    console.log('Rozpoczynam ładowanie pliku XML...');
+    const result = await parseXMLFile('products_export.xml');
+    console.log('Wynik parsowania:', result);
+    setModifiedProducts(result.products);
+    setNodes(result.menuNodes);
+    if (result.menuNodes.length > 0) {
+      setSelectedNode(result.menuNodes[0]);
     }
   };
 
-  const handleNodeSelect = (nodeId) => {
-    setSelectedNode(nodeId);
-    const nodeProducts = products.filter(product => 
-      product.menuItems.some(item => item.textId === nodeId)
+  const handleNodeSelect = useCallback((node) => {
+    setSelectedNode(node);
+    const nodeProducts = modifiedProducts.filter(product => 
+      product.menuItems.some(item => item.textId === node)
     );
     
-    const sorted = nodeProducts.sort((a, b) => {
-      const aPriority = a.menuItems.find(item => item.textId === nodeId).level;
-      const bPriority = b.menuItems.find(item => item.textId === nodeId).level;
-      return bPriority - aPriority;
-    });
-    
-    setFilteredProducts(sorted);
-  };
+    if (nodeProducts.length > 0) {
+      const sorted = nodeProducts.sort((a, b) => {
+        const aPriority = a.menuItems.find(item => item.textId === node)?.level || 0;
+        const bPriority = b.menuItems.find(item => item.textId === node)?.level || 0;
+        return aPriority - bPriority;
+      });
+      
+      setFilteredProducts([...sorted]);
+    } else {
+      setFilteredProducts([]);
+    }
+  }, [modifiedProducts]);
 
-  const handleProductsReorder = (newFilteredProducts) => {
-    const updatedProducts = [...products];
-    
-    newFilteredProducts.forEach((product, index) => {
-      const newPriority = 999 - index;
-      const productToUpdate = updatedProducts.find(p => p.id === product.id);
-      if (productToUpdate) {
-        productToUpdate.menuItems = productToUpdate.menuItems.map(item => {
-          if (item.textId === selectedNode) {
-            return { ...item, level: newPriority };
-          }
-          return item;
-        });
-      }
-    });
+  const handleProductsReorder = useCallback((newProducts) => {
+    if (!selectedNode) return;
 
-    setProducts(updatedProducts);
+    setModifiedNodes(prev => new Set([...prev, selectedNode]));
+
+    const newFilteredProducts = newProducts.map((product, index) => ({
+      ...product,
+      menuItems: product.menuItems.map(item => ({
+        ...item,
+        level: item.textId === selectedNode ? index + 1 : item.level
+      }))
+    }));
+
     setFilteredProducts(newFilteredProducts);
-  };
+    setModifiedProducts(prevProducts => {
+      const updatedProducts = [...prevProducts];
+      newFilteredProducts.forEach(filteredProduct => {
+        const index = updatedProducts.findIndex(p => p.id === filteredProduct.id);
+        if (index !== -1) {
+          updatedProducts[index] = {
+            ...updatedProducts[index],
+            menuItems: filteredProduct.menuItems
+          };
+        }
+      });
+      return updatedProducts;
+    });
+  }, [selectedNode]);
 
-  const handleSave = async () => {
+  const handleSave = () => {
     try {
-      setIsLoading(true);
-      setError(null);
-      await updateProductPriorities(shopConfig.shopId, products);
-      alert('Kolejność produktów została zaktualizowana!');
+      if (!modifiedProducts.length) {
+        throw new Error('Brak produktów do zapisania');
+      }
+
+      let currentXML = modifiedProducts[0].__originalXML;
+
+      [...modifiedNodes].forEach(node => {
+        const nodeProducts = modifiedProducts.filter(product => 
+          product.menuItems.some(item => item.textId === node)
+        ).sort((a, b) => {
+          const aPriority = a.menuItems.find(item => item.textId === node)?.level || 0;
+          const bPriority = b.menuItems.find(item => item.textId === node)?.level || 0;
+          return aPriority - bPriority;
+        });
+
+        currentXML = generateNewXML(
+          [{ __originalXML: currentXML }],
+          nodeProducts,
+          node
+        );
+      });
+
+      const blob = new Blob([currentXML], { type: 'text/xml' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'updated_products.xml';
+      a.click();
+      window.URL.revokeObjectURL(url);
+
+      setModifiedNodes(new Set());
     } catch (error) {
-      setError('Nie udało się zaktualizować kolejności produktów');
-      console.error(error);
-    } finally {
-      setIsLoading(false);
+      console.error('Błąd podczas zapisywania:', error);
+      alert(error.message || 'Wystąpił błąd podczas zapisywania pliku.');
     }
   };
 
-  if (!shopConfig) {
-    return (
-      <div style={{ padding: '20px' }}>
-        <h2>Konfiguracja sklepu</h2>
-        <form onSubmit={(e) => {
-          e.preventDefault();
-          const config = {
-            shopId: e.target.shopId.value,
-            login: e.target.login.value,
-            apiKey: e.target.apiKey.value
-          };
-          localStorage.setItem('shopConfig', JSON.stringify(config));
-          setShopConfig(config);
-        }}>
-          <div>
-            <label>ID Sklepu: </label>
-            <input name="shopId" required />
-          </div>
-          <div>
-            <label>Login WebAPI: </label>
-            <input name="login" required />
-          </div>
-          <div>
-            <label>Klucz API: </label>
-            <input name="apiKey" type="password" required />
-          </div>
-          <button type="submit">Zapisz</button>
-        </form>
-      </div>
-    );
-  }
+  const handleFileUpload = async (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      try {
+        const text = await file.text();
+        console.log('Wczytywanie pliku XML...');
+        const result = await parseXMLFile(text, true);
+        setModifiedProducts(result.products);
+        setNodes(result.menuNodes);
+        setSelectedNode(null);
+        setFilteredProducts([]);
+        event.target.value = '';
+      } catch (error) {
+        console.error('Błąd podczas wczytywania pliku:', error);
+        alert(error.message || 'Wystąpił błąd podczas wczytywania pliku. Sprawdź format pliku XML.');
+        event.target.value = '';
+      }
+    }
+  };
+
+  const handleUploadClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  useEffect(() => {
+    if (selectedNode) {
+      handleNodeSelect(selectedNode);
+    }
+  }, [selectedNode, handleNodeSelect]);
 
   return (
     <AppContainer>
       <SidebarContainer>
+        <FileInput 
+          type="file" 
+          ref={fileInputRef}
+          accept=".xml"
+          onChange={handleFileUpload}
+        />
         <ActionButton 
           variant="secondary"
-          onClick={loadProductsFromShop}
-          disabled={isLoading}
+          onClick={handleUploadClick}
         >
-          Odśwież produkty
+          Wgraj nowy plik XML
         </ActionButton>
         <MenuSelector 
-          nodes={menuNodes} 
-          onSelect={handleNodeSelect} 
-          activeNode={selectedNode} 
+          nodes={nodes}
+          activeNode={selectedNode}
+          onSelect={handleNodeSelect}
         />
         <ActionButton 
           variant="primary"
           onClick={handleSave}
-          disabled={isLoading || !selectedNode || filteredProducts.length === 0}
+          disabled={!selectedNode || filteredProducts.length === 0}
         >
-          {isLoading ? 'Zapisywanie...' : 'Zapisz kolejność'}
+          Zapisz kolejność
         </ActionButton>
       </SidebarContainer>
       <MainContent>
-        {error && (
-          <div style={{ color: 'red', marginBottom: '10px' }}>
-            {error}
-          </div>
-        )}
         {selectedNode && (
           <ProductGrid 
             products={filteredProducts} 
