@@ -93,6 +93,22 @@ const ProductCode = styled.div`
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 `;
 
+const ProductCard = styled.div`
+  // ... istniejące style ...
+`;
+
+const PriorityInfo = styled.div`
+  font-size: 12px;
+  color: #666;
+  margin: 5px 0;
+  text-align: center;
+`;
+
+const ProductInfo = styled.div`
+  padding: 10px;
+  text-align: center;
+`;
+
 const SortableItem = React.memo(({ product }) => {
   const {
     attributes,
@@ -121,6 +137,9 @@ const SortableItem = React.memo(({ product }) => {
           loading="lazy"
         />
       </ImageContainer>
+      <PriorityInfo>
+        Priorytet: {product.priority}
+      </PriorityInfo>
       <ProductCode>
         Index: {product.codeOnCard}
       </ProductCode>
@@ -129,7 +148,7 @@ const SortableItem = React.memo(({ product }) => {
   );
 });
 
-function ProductGrid({ products, onProductsReorder }) {
+function ProductGrid({ products, onProductsReorder, selectedNode }) {
   const mouseSensor = useSensor(MouseSensor);
   const touchSensor = useSensor(TouchSensor);
   
@@ -151,6 +170,22 @@ function ProductGrid({ products, onProductsReorder }) {
       onProductsReorder(arrayMove(products, oldIndex, newIndex));
     }
   }, [sortableItems, products, onProductsReorder]);
+
+  const renderProduct = (product) => (
+    <ProductCard>
+      <img 
+        src={product.iconUrl || 'placeholder.jpg'} 
+        alt={`Product ${product.id}`} 
+      />
+      <ProductInfo>
+        <PriorityInfo>
+          Priorytet: {product.menuItems.find(item => item.textId === selectedNode)?.level || 'brak'}
+        </PriorityInfo>
+        <div>ID: {product.id}</div>
+        <div>Index: {product.index || product.id}</div>
+      </ProductInfo>
+    </ProductCard>
+  );
 
   if (!products?.length) {
     return <GridContainer>Wybierz kategorię, aby zobaczyć produkty</GridContainer>;
@@ -174,7 +209,10 @@ function ProductGrid({ products, onProductsReorder }) {
             {sortableItems.map((product) => (
               <SortableItem
                 key={product.sortableId}
-                product={product}
+                product={{
+                  ...product,
+                  priority: product.menuItems.find(item => item.textId === selectedNode)?.level || 'brak'
+                }}
               />
             ))}
           </ProductList>

@@ -1,102 +1,62 @@
-export const generateNewXML = (allProducts, orderedProducts, selectedNode) => {
+export const generateNewXML = (originalProducts, products, nodes) => {
   try {
-    console.log('Debug generateNewXML:');
-    console.log('selectedNode:', selectedNode);
-    console.log('orderedProducts:', orderedProducts.map(p => p.id));
-    console.log('Original XML length:', allProducts[0].__originalXML.length);
+    let xmlText = originalProducts[0].__originalXML;
 
-    if (!allProducts?.[0]?.__originalXML) {
-      throw new Error('Brak oryginalnego XML');
-    }
-
-    const priorityMap = new Map(
-      orderedProducts.map((product, index) => [product.id, index + 1])
-    );
-
-    let updatedXML = allProducts[0].__originalXML;
-
-    // Znajdźmy i zaktualizujmy produkty
-    const productsToUpdate = orderedProducts.map(product => {
-      const productRegex = new RegExp(`<product[^>]*?id="${product.id}"[^>]*>([\\s\\S]*?)</product>`, 'g');
-      const match = productRegex.exec(updatedXML);
-      
-      if (!match) {
-        console.warn(`Product ${product.id} not found in XML!`);
-        return null;
-      }
-
-      const startIndex = match.index;
-      const endIndex = startIndex + match[0].length;
-      const productXML = match[0];
-      const newPriority = priorityMap.get(product.id);
-
-      console.log(`Product ${product.id} found with priority ${newPriority}:`, {
-        startIndex,
-        endIndex,
-        length: productXML.length
-      });
-
-      // Aktualizuj priorytety w XML produktu
-      let updatedProductXML = productXML;
-
-      // Aktualizuj version_priority
-      updatedProductXML = updatedProductXML.replace(
-        /(iaiext:version_priority=")[^"]*"/,
-        `$1${newPriority}"`
+    // Dla każdego produktu
+    products.forEach(product => {
+      const productXML = new RegExp(
+        `<product[^>]*?id="${product.id}"[\\s\\S]*?</product>`,
+        'g'
       );
 
-      // Aktualizuj priority_menu dla wybranego węzła
-      const menuUpdates = [
-        {
-          regex: new RegExp(`(<iaiext:item[^>]*?textid="${selectedNode.replace('\\', '\\\\')}"[^>]*)iaiext:priority_menu="[^"]*"`, 'g'),
-          replacement: `$1iaiext:priority_menu="${newPriority}"`
-        },
-        {
-          regex: new RegExp(`(<iaiext:node_path_translation[^>]*?name="${selectedNode.replace('\\', '\\\\')}"[^>]*)iaiext:priority_menu="[^"]*"`, 'g'),
-          replacement: `$1iaiext:priority_menu="${newPriority}"`
-        },
-        {
-          regex: new RegExp(`(<item[^>]*?textId="${selectedNode.replace('\\', '\\\\')}"[^>]*)level="[^"]*"`, 'g'),
-          replacement: `$1level="${newPriority}"`
-        }
-      ];
+      const matches = xmlText.match(productXML);
+      if (!matches) return;
 
-      menuUpdates.forEach(update => {
-        updatedProductXML = updatedProductXML.replace(update.regex, update.replacement);
-      });
+      let updatedProductXML = matches[0];
 
-      return {
-        id: product.id,
-        priority: newPriority,
-        xml: updatedProductXML,
-        startIndex,
-        endIndex
-      };
-    }).filter(Boolean);
+      // Znajdujemy sekcję priority_menu
+      const priorityMenuRegex = /<iaiext:priority_menu>[\s\S]*?<\/iaiext:priority_menu>/;
+      const priorityMenuMatch = updatedProductXML.match(priorityMenuRegex);
+      
+      if (priorityMenuMatch) {
+        let priorityMenuSection = priorityMenuMatch[0];
+        
+        // Aktualizujemy priorytety dla wszystkich zmodyfikowanych węzłów
+        nodes.forEach(nodePath => {
+          const menuItem = product.menuItems.find(item => item.textId === nodePath);
+          if (!menuItem) return;
 
-    // Sortujemy produkty od końca
-    productsToUpdate.sort((a, b) => b.startIndex - a.startIndex);
+          console.log(`Updating priority for product ${product.id}, node ${nodePath} to ${menuItem.level}`);
 
-    // Aktualizujemy XML
-    productsToUpdate.forEach(product => {
-      console.log(`Updating product ${product.id} with priority ${product.priority}`);
-      updatedXML = updatedXML.substring(0, product.startIndex) +
-                   product.xml +
-                   updatedXML.substring(product.endIndex);
+          // Escapujemy backslashe w ścieżce dla wyrażenia regularnego
+          const escapedNodePath = nodePath.replace(/\\/g, '\\\\');
+          
+          // Aktualizujemy priorytet w sekcji priority_menu
+          const itemRegex = new RegExp(
+            `(<item[^>]*?textId="${escapedNodePath}"[^>]*?)(level="\\d+")`,
+            'g'
+          );
+          
+          priorityMenuSection = priorityMenuSection.replace(
+            itemRegex,
+            `$1level="${menuItem.level}"`
+          );
+        });
+
+        // Zamieniamy całą sekcję priority_menu
+        updatedProductXML = updatedProductXML.replace(
+          priorityMenuRegex,
+          priorityMenuSection
+        );
+      }
+
+      // Aktualizujemy cały produkt w XML
+      xmlText = xmlText.replace(matches[0], updatedProductXML);
     });
 
-    console.log('Final XML length:', updatedXML.length);
-
-    // Aktualizuj datę wygenerowania
-    const currentDate = new Date().toISOString().replace('T', ' ').substring(0, 19);
-    updatedXML = updatedXML.replace(
-      /(generated=")[^"]*"/,
-      `$1${currentDate}"`
-    );
-
-    return updatedXML;
+    return xmlText;
   } catch (error) {
     console.error('Błąd podczas generowania XML:', error);
-    throw error;
+    throw new Error('Nie udało się wygenerować pliku XML');
   }
 }; 

@@ -23,6 +23,18 @@ const SidebarContainer = styled.div`
 
 const MainContent = styled.div`
   flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 400px;
+  background: #f5f5f5;
+  border-radius: 8px;
+`;
+
+const InitialMessage = styled.div`
+  text-align: center;
+  color: #666;
+  padding: 40px;
 `;
 
 const ActionButton = styled.button`
@@ -35,7 +47,6 @@ const ActionButton = styled.button`
   width: 100%;
   transition: all 0.2s ease;
   font-size: 14px;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   font-weight: 500;
 
   &:hover {
@@ -53,28 +64,13 @@ const FileInput = styled.input`
 `;
 
 function App() {
+  const [products, setProducts] = useState(null);
   const [nodes, setNodes] = useState([]);
   const [selectedNode, setSelectedNode] = useState(null);
   const [filteredProducts, setFilteredProducts] = useState([]);
   const [modifiedProducts, setModifiedProducts] = useState([]);
   const [modifiedNodes, setModifiedNodes] = useState(new Set());
   const fileInputRef = useRef(null);
-
-  useEffect(() => {
-    console.log('App mounted, loading XML file...');
-    loadXMLFile();
-  }, []);
-
-  const loadXMLFile = async () => {
-    console.log('Rozpoczynam ładowanie pliku XML...');
-    const result = await parseXMLFile('products_export.xml');
-    console.log('Wynik parsowania:', result);
-    setModifiedProducts(result.products);
-    setNodes(result.menuNodes);
-    if (result.menuNodes.length > 0) {
-      setSelectedNode(result.menuNodes[0]);
-    }
-  };
 
   const handleNodeSelect = useCallback((node) => {
     setSelectedNode(node);
@@ -86,7 +82,7 @@ function App() {
       const sorted = nodeProducts.sort((a, b) => {
         const aPriority = a.menuItems.find(item => item.textId === node)?.level || 0;
         const bPriority = b.menuItems.find(item => item.textId === node)?.level || 0;
-        return aPriority - bPriority;
+        return bPriority - aPriority;
       });
       
       setFilteredProducts([...sorted]);
@@ -98,46 +94,102 @@ function App() {
   const handleProductsReorder = useCallback((newProducts) => {
     if (!selectedNode) return;
 
+    console.log('Selected node:', selectedNode);
+    console.log('Modified nodes before:', [...modifiedNodes]);
+
     setModifiedNodes(prev => {
       const newNodes = new Set([...prev, selectedNode]);
-      if (selectedNode === 'SKLEP') {
-        newNodes.add('SKLEP\\Zobacz Wszystko');
-      } else if (selectedNode === 'SKLEP\\Zobacz Wszystko') {
-        newNodes.add('SKLEP');
+      console.log('Current node path:', selectedNode);
+      
+      if (selectedNode === 'SKLEP' || selectedNode === 'SKLEP\\Zobacz Wszystko') {
+        const relatedNode = selectedNode === 'SKLEP' ? 'SKLEP\\Zobacz Wszystko' : 'SKLEP';
+        newNodes.add(relatedNode);
       }
+      if (selectedNode.endsWith('\\Kamizelki')) {
+        console.log('Adding Kamizelki node');
+        newNodes.add(selectedNode);
+      }
+      
+      console.log('Modified nodes after:', [...newNodes]);
       return newNodes;
     });
 
-    const newFilteredProducts = newProducts.map((product, index) => ({
+    const startPriority = 930;
+    
+    setModifiedProducts(prevProducts => {
+      const updatedProducts = [...prevProducts];
+      
+      newProducts.forEach((product, index) => {
+        const productIndex = updatedProducts.findIndex(p => p.id === product.id);
+        if (productIndex === -1) return;
+        
+        const newPriority = startPriority - index;
+        
+        console.log('Product before update:', {
+          id: product.id,
+          menuItems: updatedProducts[productIndex].menuItems.map(i => ({
+            textId: i.textId,
+            level: i.level
+          }))
+        });
+        
+        updatedProducts[productIndex] = {
+          ...updatedProducts[productIndex],
+          menuItems: updatedProducts[productIndex].menuItems.map(item => {
+            if (item.textId === selectedNode) {
+              console.log(`Updating priority for ${product.id} in node ${selectedNode} to ${newPriority}`);
+              return { ...item, level: newPriority };
+            }
+            if ((selectedNode === 'SKLEP' && item.textId === 'SKLEP\\Zobacz Wszystko') ||
+                (selectedNode === 'SKLEP\\Zobacz Wszystko' && item.textId === 'SKLEP')) {
+              return { ...item, level: newPriority };
+            }
+            return item;
+          })
+        };
+
+        console.log('Product after update:', {
+          id: product.id,
+          menuItems: updatedProducts[productIndex].menuItems.map(i => ({
+            textId: i.textId,
+            level: i.level
+          }))
+        });
+      });
+
+      console.log('Updated products:', updatedProducts.map(p => ({
+        id: p.id,
+        menuItems: p.menuItems.map(i => ({
+          textId: i.textId,
+          level: i.level
+        }))
+      })));
+
+      return updatedProducts;
+    });
+
+    const updatedFilteredProducts = newProducts.map((product, index) => ({
       ...product,
       menuItems: product.menuItems.map(item => {
-        if (item.textId === selectedNode || 
-           (selectedNode === 'SKLEP' && item.textId === 'SKLEP\\Zobacz Wszystko') ||
-           (selectedNode === 'SKLEP\\Zobacz Wszystko' && item.textId === 'SKLEP')) {
+        if (item.textId === selectedNode) {
           return {
             ...item,
-            level: index + 1
+            level: startPriority - index
+          };
+        }
+        if ((selectedNode === 'SKLEP' && item.textId === 'SKLEP\\Zobacz Wszystko') ||
+            (selectedNode === 'SKLEP\\Zobacz Wszystko' && item.textId === 'SKLEP')) {
+          return {
+            ...item,
+            level: startPriority - index
           };
         }
         return item;
       })
     }));
 
-    setFilteredProducts(newFilteredProducts);
-    setModifiedProducts(prevProducts => {
-      const updatedProducts = [...prevProducts];
-      newFilteredProducts.forEach(filteredProduct => {
-        const index = updatedProducts.findIndex(p => p.id === filteredProduct.id);
-        if (index !== -1) {
-          updatedProducts[index] = {
-            ...updatedProducts[index],
-            menuItems: filteredProduct.menuItems
-          };
-        }
-      });
-      return updatedProducts;
-    });
-  }, [selectedNode]);
+    setFilteredProducts(updatedFilteredProducts);
+  }, [selectedNode, modifiedNodes]);
 
   const handleSave = () => {
     try {
@@ -146,22 +198,14 @@ function App() {
       }
 
       let currentXML = modifiedProducts[0].__originalXML;
+      const allNodes = [...modifiedNodes];
 
-      [...modifiedNodes].forEach(node => {
-        const nodeProducts = modifiedProducts.filter(product => 
-          product.menuItems.some(item => item.textId === node)
-        ).sort((a, b) => {
-          const aPriority = a.menuItems.find(item => item.textId === node)?.level || 0;
-          const bPriority = b.menuItems.find(item => item.textId === node)?.level || 0;
-          return aPriority - bPriority;
-        });
-
-        currentXML = generateNewXML(
-          [{ __originalXML: currentXML }],
-          nodeProducts,
-          node
-        );
-      });
+      // Generujemy XML tylko raz, przekazując wszystkie zmodyfikowane węzły
+      currentXML = generateNewXML(
+        [{ __originalXML: currentXML }],
+        modifiedProducts,
+        allNodes
+      );
 
       const blob = new Blob([currentXML], { type: 'text/xml' });
       const url = window.URL.createObjectURL(blob);
@@ -183,23 +227,20 @@ function App() {
     if (file) {
       try {
         const text = await file.text();
-        console.log('Wczytywanie pliku XML...');
-        const result = await parseXMLFile(text, true);
-        setModifiedProducts(result.products);
-        setNodes(result.menuNodes);
+        const { products: parsedProducts, menuNodes } = await parseXMLFile(text, true);
+        setProducts(parsedProducts);
+        setModifiedProducts(parsedProducts);
+        setNodes(menuNodes);
         setSelectedNode(null);
         setFilteredProducts([]);
+        setModifiedNodes(new Set());
         event.target.value = '';
       } catch (error) {
         console.error('Błąd podczas wczytywania pliku:', error);
-        alert(error.message || 'Wystąpił błąd podczas wczytywania pliku. Sprawdź format pliku XML.');
+        alert('Wystąpił błąd podczas wczytywania pliku XML');
         event.target.value = '';
       }
     }
-  };
-
-  const handleUploadClick = () => {
-    fileInputRef.current?.click();
   };
 
   useEffect(() => {
@@ -219,29 +260,42 @@ function App() {
         />
         <ActionButton 
           variant="secondary"
-          onClick={handleUploadClick}
+          onClick={() => fileInputRef.current?.click()}
         >
-          Wgraj nowy plik XML
+          {products ? 'Wgraj nowy plik XML' : 'Wgraj plik XML'}
         </ActionButton>
-        <MenuSelector 
-          nodes={nodes}
-          activeNode={selectedNode}
-          onSelect={handleNodeSelect}
-        />
-        <ActionButton 
-          variant="primary"
-          onClick={handleSave}
-          disabled={!selectedNode || filteredProducts.length === 0}
-        >
-          Zapisz kolejność
-        </ActionButton>
+        {products && (
+          <>
+            <MenuSelector 
+              nodes={nodes}
+              activeNode={selectedNode}
+              onSelect={handleNodeSelect}
+            />
+            <ActionButton 
+              variant="primary"
+              onClick={handleSave}
+              disabled={!selectedNode || filteredProducts.length === 0}
+            >
+              Zapisz kolejność
+            </ActionButton>
+          </>
+        )}
       </SidebarContainer>
       <MainContent>
-        {selectedNode && (
+        {!products ? (
+          <InitialMessage>
+            Wgraj plik XML aby rozpocząć pracę
+          </InitialMessage>
+        ) : selectedNode ? (
           <ProductGrid 
             products={filteredProducts} 
             onProductsReorder={handleProductsReorder}
+            selectedNode={selectedNode}
           />
+        ) : (
+          <InitialMessage>
+            Wybierz kategorię z menu po lewej stronie
+          </InitialMessage>
         )}
       </MainContent>
     </AppContainer>

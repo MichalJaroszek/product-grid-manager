@@ -14,76 +14,116 @@ export const parseXMLFile = async (source, isText = false) => {
       attributeNamePrefix: "",
       ignoreAttributes: false,
       allowBooleanAttributes: true,
-      parseAttributeValue: false,
+      parseAttributeValue: true,
       trimValues: true,
       processEntities: false,
-      isArray: (name) => ['product', 'iaiext:item'].includes(name)
+      isArray: (name, jpath) => {
+        // Upewniamy się, że te elementy zawsze będą tablicami
+        if (['product', 'iaiext:item', 'item'].includes(name)) return true;
+        // Wymuszamy tablicę dla menu w priority_menu
+        if (name === 'menu' && jpath.includes('priority_menu')) return true;
+        // Wymuszamy tablicę dla site w priority_menu
+        if (name === 'site' && jpath.includes('priority_menu')) return true;
+        return false;
+      },
+      tagValueProcessor: (tagName, tagValue, jPath, hasAttributes, isLeafNode) => {
+        return tagValue;
+      },
+      attributeValueProcessor: (attrName, attrValue, jPath) => {
+        return attrValue;
+      }
     };
 
     const parser = new XMLParser(options);
     const result = parser.parse(xmlText);
 
+    console.log('Raw XML:', xmlText.substring(0, 1000)); // Pokaż początek XML
+    console.log('Parsed XML structure:', JSON.stringify(result.offer.products.product[0], null, 2));
+
     if (!result?.offer?.products?.product) {
       throw new Error('Nieprawidłowa struktura pliku XML');
     }
 
-    // Wyciągamy tylko potrzebne dane i zachowujemy oryginalny XML
     const products = result.offer.products.product
-      .map(product => ({
-        id: product.id,
-        iconUrl: product.images?.icons?.icon?.url,
-        codeOnCard: product.code_on_card,
-        menuItems: extractMenuItems(product),
-        originalData: product,
-        __originalXML: xmlText // Dodajemy oryginalny XML do każdego produktu
-      }))
+      .map(product => {
+        console.log('Processing product:', product.id);
+        console.log('Priority menu section:', JSON.stringify(product['iaiext:priority_menu'], null, 2));
+        
+        return {
+          id: product.id,
+          iconUrl: product.images?.icons?.icon?.url,
+          codeOnCard: product.code_on_card,
+          menuItems: extractMenuItems(product),
+          originalData: product,
+          __originalXML: xmlText
+        };
+      })
       .filter(product => product.menuItems.length > 0);
 
-    const menuNodes = [...new Set(
+    return { products, menuNodes: [...new Set(
       products.flatMap(p => p.menuItems.map(i => i.textId))
-    )].filter(Boolean).sort();
-
-    return { products, menuNodes };
+    )].filter(Boolean).sort() };
   } catch (error) {
     console.error('Błąd podczas parsowania XML:', error);
     throw error;
   }
 };
 
-// Wydzielona funkcja do ekstrakcji menu items
 const extractMenuItems = (product) => {
   try {
     const navigation = product['iaiext:navigation'];
-    const items = navigation?.['iaiext:site']?.['iaiext:menu']?.[0]?.['iaiext:item'] || [];
+    const navigationItems = navigation?.['iaiext:site']?.['iaiext:menu']?.[0]?.['iaiext:item'] || [];
     
-    // Dodajemy filtrowanie aby upewnić się, że mamy wszystkie węzły
-    return items
-      .filter(item => item.textid) // upewniamy się że item ma textid
+    console.log('Raw product data:', JSON.stringify(product, null, 2));
+    
+    const priorityMenuItems = product['iaiext:priority_menu']?.site?.[0]?.menu?.[0]?.item || [];
+    console.log('Priority menu items before processing:', priorityMenuItems);
+    
+    console.log('Priority menu structure:', {
+      priorityMenu: product['iaiext:priority_menu'],
+      site: product['iaiext:priority_menu']?.site,
+      menu: product['iaiext:priority_menu']?.site?.[0]?.menu,
+      items: product['iaiext:priority_menu']?.site?.[0]?.menu?.[0]?.item
+    });
+    
+    const priorityMap = new Map(
+      priorityMenuItems.map(item => {
+        const textId = item.textId || item.textid;
+        const level = parseInt(item.level) || 930;
+        console.log('Processing priority item:', { textId, level, originalItem: item });
+        return [textId.replace(/\\\\/g, '\\'), level];
+      })
+    );
+    
+    console.log('Final priority map:', Object.fromEntries(priorityMap));
+    
+    return navigationItems
+      .filter(item => item.textid || item.textId)
       .map(item => {
-        // Wyciągamy zarówno pełną ścieżkę jak i sam węzeł
-        const pathParts = item.textid.split('\\');
+        const pathParts = (item.textid || item.textId).split('\\');
         const items = [];
         
-        // Dodajemy każdy poziom ścieżki jako osobny item
         let currentPath = '';
         pathParts.forEach((part, index) => {
           currentPath = currentPath ? `${currentPath}\\${part}` : part;
+          const priority = priorityMap.get(currentPath);
+          console.log('Getting priority for path:', currentPath, 'Priority:', priority);
           items.push({
             textId: currentPath,
             name: currentPath,
-            level: parseInt(item['iaiext:priority_menu']) || 0
+            level: priority !== undefined ? priority : 930
           });
         });
         
         return items;
       })
-      .flat() // spłaszczamy tablicę
+      .flat()
       .filter((item, index, self) => 
-        // Usuwamy duplikaty
         index === self.findIndex(t => t.textId === item.textId)
       );
   } catch (error) {
     console.error('Błąd podczas ekstrakcji menu items:', error);
+    console.error('Product data:', JSON.stringify(product, null, 2));
     return [];
   }
 }; 

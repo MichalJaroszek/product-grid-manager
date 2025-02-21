@@ -198,7 +198,7 @@
 </iaiext:pos_prices_config>
 <iaiext:priority level="930"/>
 <iaiext:deliverer id="0" name="dostawca niezdefiniowany"/>
-<iaiext:subscriptions_settings><iaiext:site id="" enabled="false" units_number_retail="" units_number_wholesale=""><days_in_period></days_in_period></iaiext:site></iaiext:subscriptions_settings><iaiext:responsible_entity></iaiext:responsible_entity><iaiext:modification_date datetime="2025-02-16 05:28:22" /><iaiext:expiry_date datetime="0000-00-00" /><iaiext:priority_menu><site id="1"><menu id="1"><item id="428" textId="SKLEP" level="930"/><item id="429" textId="SKLEP\Zobacz Wszystko" level="930"/><item id="442" textId="SKLEP\Kamizelki" level="930"/></menu></site></iaiext:priority_menu><iaiext:delivery_time unit="day" value="1"><iaiext:mode type="deliverer"/>
+<iaiext:subscriptions_settings><iaiext:site id="" enabled="false" units_number_retail="" units_number_wholesale=""><days_in_period></days_in_period></iaiext:site></iaiext:subscriptions_settings><iaiext:responsible_entity></iaiext:responsible_entity><iaiext:modification_date datetime="2025-02-16 05:28:22" /><iaiext:expiry_date datetime="0000-00-00" /><iaiext:priority_menu><site id="1"><menu id="1"><item id="428" textId="SKLEP" level="929"/><item id="429" textId="SKLEP\Zobacz Wszystko" level="929"/><item id="442" textId="SKLEP\Kamizelki" level="930"/></menu></site></iaiext:priority_menu><iaiext:delivery_time unit="day" value="1"><iaiext:mode type="deliverer"/>
 <iaiext:time days="1"/>
 </iaiext:delivery_time>
 <iaiext:services_descriptions></iaiext:services_descriptions>
@@ -405,7 +405,7 @@
 </iaiext:pos_prices_config>
 <iaiext:priority level="930"/>
 <iaiext:deliverer id="0" name="dostawca niezdefiniowany"/>
-<iaiext:subscriptions_settings><iaiext:site id="" enabled="false" units_number_retail="" units_number_wholesale=""><days_in_period></days_in_period></iaiext:site></iaiext:subscriptions_settings><iaiext:responsible_entity></iaiext:responsible_entity><iaiext:modification_date datetime="2025-02-16 05:28:22" /><iaiext:expiry_date datetime="0000-00-00" /><iaiext:priority_menu><site id="1"><menu id="1"><item id="428" textId="SKLEP" level="930"/><item id="429" textId="SKLEP\Zobacz Wszystko" level="930"/><item id="442" textId="SKLEP\Kamizelki" level="930"/></menu></site></iaiext:priority_menu><iaiext:delivery_time unit="day" value="1"><iaiext:mode type="deliverer"/>
+<iaiext:subscriptions_settings><iaiext:site id="" enabled="false" units_number_retail="" units_number_wholesale=""><days_in_period></days_in_period></iaiext:site></iaiext:subscriptions_settings><iaiext:responsible_entity></iaiext:responsible_entity><iaiext:modification_date datetime="2025-02-16 05:28:22" /><iaiext:expiry_date datetime="0000-00-00" /><iaiext:priority_menu><site id="1"><menu id="1"><item id="428" textId="SKLEP" level="928"/><item id="429" textId="SKLEP\Zobacz Wszystko" level="928"/><item id="442" textId="SKLEP\Kamizelki" level="930"/></menu></site></iaiext:priority_menu><iaiext:delivery_time unit="day" value="1"><iaiext:mode type="deliverer"/>
 <iaiext:time days="1"/>
 </iaiext:delivery_time>
 <iaiext:services_descriptions></iaiext:services_descriptions>
@@ -613,7 +613,7 @@
 </iaiext:pos_prices_config>
 <iaiext:priority level="930"/>
 <iaiext:deliverer id="0" name="dostawca niezdefiniowany"/>
-<iaiext:subscriptions_settings><iaiext:site id="" enabled="false" units_number_retail="" units_number_wholesale=""><days_in_period></days_in_period></iaiext:site></iaiext:subscriptions_settings><iaiext:responsible_entity></iaiext:responsible_entity><iaiext:modification_date datetime="2025-02-16 05:28:22" /><iaiext:expiry_date datetime="0000-00-00" /><iaiext:priority_menu><site id="1"><menu id="1"><item id="428" textId="SKLEP" level="930"/><item id="429" textId="SKLEP\Zobacz Wszystko" level="930"/><item id="442" textId="SKLEP\Kamizelki" level="930"/></menu></site></iaiext:priority_menu><iaiext:delivery_time unit="day" value="1"><iaiext:mode type="deliverer"/>
+<iaiext:subscriptions_settings><iaiext:site id="" enabled="false" units_number_retail="" units_number_wholesale=""><days_in_period></days_in_period></iaiext:site></iaiext:subscriptions_settings><iaiext:responsible_entity></iaiext:responsible_entity><iaiext:modification_date datetime="2025-02-16 05:28:22" /><iaiext:expiry_date datetime="0000-00-00" /><iaiext:priority_menu><site id="1"><menu id="1"><item id="428" textId="SKLEP" level="927"/><item id="429" textId="SKLEP\Zobacz Wszystko" level="927"/><item id="442" textId="SKLEP\Kamizelki" level="930"/></menu></site></iaiext:priority_menu><iaiext:delivery_time unit="day" value="1"><iaiext:mode type="deliverer"/>
 <iaiext:time days="1"/>
 </iaiext:delivery_time>
 <iaiext:services_descriptions></iaiext:services_descriptions>
