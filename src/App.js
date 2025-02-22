@@ -80,9 +80,16 @@ function App() {
     
     if (nodeProducts.length > 0) {
       const sorted = nodeProducts.sort((a, b) => {
+        // Najpierw porównujemy priorytety
         const aPriority = a.menuItems.find(item => item.textId === node)?.level || 0;
         const bPriority = b.menuItems.find(item => item.textId === node)?.level || 0;
-        return bPriority - aPriority;
+        
+        if (bPriority !== aPriority) {
+          return bPriority - aPriority; // Wyższy priorytet na górze
+        }
+        
+        // Jeśli priorytety są równe, sortujemy po ID (wyższe ID wyżej)
+        return parseInt(b.id) - parseInt(a.id);
       });
       
       setFilteredProducts([...sorted]);
@@ -186,7 +193,16 @@ function App() {
         }
         return item;
       })
-    }));
+    })).sort((a, b) => {
+      const aPriority = a.menuItems.find(item => item.textId === selectedNode)?.level || 0;
+      const bPriority = b.menuItems.find(item => item.textId === selectedNode)?.level || 0;
+      
+      if (bPriority !== aPriority) {
+        return bPriority - aPriority;
+      }
+      
+      return parseInt(b.id) - parseInt(a.id);
+    });
 
     setFilteredProducts(updatedFilteredProducts);
   }, [selectedNode, modifiedNodes]);

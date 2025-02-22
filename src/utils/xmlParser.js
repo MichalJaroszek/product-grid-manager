@@ -45,8 +45,14 @@ export const parseXMLFile = async (source, isText = false) => {
     }
 
     const products = result.offer.products.product
+      // Najpierw filtrujemy produkty po widoczności
+      .filter(product => {
+        const isVisible = product['iaiext:visibility']?.['iaiext:site']?.visible === 'yes';
+        console.log(`Product ${product.id} visibility:`, isVisible);
+        return isVisible;
+      })
       .map(product => {
-        console.log('Processing product:', product.id);
+        console.log('Processing visible product:', product.id);
         console.log('Priority menu section:', JSON.stringify(product['iaiext:priority_menu'], null, 2));
         
         return {
@@ -60,9 +66,12 @@ export const parseXMLFile = async (source, isText = false) => {
       })
       .filter(product => product.menuItems.length > 0);
 
-    return { products, menuNodes: [...new Set(
-      products.flatMap(p => p.menuItems.map(i => i.textId))
-    )].filter(Boolean).sort() };
+    return { 
+      products, 
+      menuNodes: [...new Set(
+        products.flatMap(p => p.menuItems.map(i => i.textId))
+      )].filter(Boolean).sort() 
+    };
   } catch (error) {
     console.error('Błąd podczas parsowania XML:', error);
     throw error;
