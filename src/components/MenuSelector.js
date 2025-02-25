@@ -24,7 +24,7 @@ const MenuList = styled.div`
   gap: 8px;
 `;
 
-const MenuItemStyled = styled.div`
+const MenuItem = styled.div`
   padding: 10px;
   cursor: pointer;
   background-color: ${props => props.selected ? '#f5f5f5' : 'white'};
@@ -41,38 +41,23 @@ const MenuItemStyled = styled.div`
   }
 `;
 
-const MenuItem = React.memo(({ node, isActive, onSelect }) => (
-  <MenuItemStyled
-    selected={isActive}
-    onClick={() => onSelect(node.name)}
-  >
-    {node.name}
-  </MenuItemStyled>
-));
-
-function MenuSelector({ nodes, activeNode, onSelect }) {
-  const uniqueNodes = React.useMemo(() => 
-    nodes?.map((node, index) => ({
-      id: `${node}-${index}`,
-      name: node
-    })) || []
-  , [nodes]);
-
+const MenuSelector = ({ nodes, activeNode, onSelect }) => {
   return (
     <MenuContainer>
       <MenuTitle>Menu</MenuTitle>
       <MenuList>
-        {uniqueNodes.map(node => (
+        {nodes.map((node) => (
           <MenuItem
-            key={node.id}
-            node={node}
-            isActive={node.name === activeNode}
-            onSelect={onSelect}
-          />
+            key={node}
+            selected={node === activeNode}
+            onClick={() => onSelect(node)}
+          >
+            {node}
+          </MenuItem>
         ))}
       </MenuList>
     </MenuContainer>
   );
-}
+};
 
-export default React.memo(MenuSelector); 
+export default MenuSelector; 

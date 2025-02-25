@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import styled from '@emotion/styled';
-import { parseXMLFile } from './utils/xmlParser';
+import { IdoSellService } from './services/idosellApi';
 import ProductGrid from './components/ProductGrid';
 import MenuSelector from './components/MenuSelector';
-import { generateNewXML } from './utils/xmlGenerator';
 
 const AppContainer = styled.div`
   padding: 20px;
@@ -12,7 +11,6 @@ const AppContainer = styled.div`
   display: grid;
   grid-template-columns: 280px 1fr;
   gap: 20px;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 `;
 
 const SidebarContainer = styled.div`
@@ -24,17 +22,22 @@ const SidebarContainer = styled.div`
 const MainContent = styled.div`
   flex: 1;
   display: flex;
-  justify-content: center;
-  align-items: center;
+  justify-content: flex-start;
+  align-items: flex-start;
   min-height: 400px;
   background: #f5f5f5;
   border-radius: 8px;
+  width: 100%;
 `;
 
 const InitialMessage = styled.div`
   text-align: center;
   color: #666;
   padding: 40px;
+`;
+
+const FileInput = styled.input`
+  display: none;
 `;
 
 const ActionButton = styled.button`
@@ -46,8 +49,6 @@ const ActionButton = styled.button`
   cursor: pointer;
   width: 100%;
   transition: all 0.2s ease;
-  font-size: 14px;
-  font-weight: 500;
 
   &:hover {
     background-color: ${props => props.variant === 'primary' ? '#333333' : '#000000'};
@@ -59,263 +60,241 @@ const ActionButton = styled.button`
   }
 `;
 
-const FileInput = styled.input`
-  display: none;
+const ErrorMessage = styled.div`
+  color: #dc3545;
+  padding: 10px;
+  margin-top: 10px;
+  border: 1px solid #dc3545;
+  border-radius: 4px;
+  background-color: #f8d7da;
+  font-size: 14px;
 `;
 
-function App() {
-  const [products, setProducts] = useState(null);
-  const [nodes, setNodes] = useState([]);
-  const [selectedNode, setSelectedNode] = useState(null);
-  const [filteredProducts, setFilteredProducts] = useState([]);
+const TestModeIndicator = styled.div`
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  background-color: #ff4444;
+  color: white;
+  text-align: center;
+  padding: 5px;
+  font-weight: bold;
+  z-index: 1000;
+`;
+
+const LoadingIndicator = styled.div`
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 20px;
+  border-radius: 8px;
+  z-index: 1000;
+`;
+
+const App = () => {
+  const [products, setProducts] = useState([]);
   const [modifiedProducts, setModifiedProducts] = useState([]);
+  const [selectedNode, setSelectedNode] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const fileInputRef = React.useRef(null);
+  const [nodes, setNodes] = useState([]);
+  // eslint-disable-next-line no-unused-vars
   const [modifiedNodes, setModifiedNodes] = useState(new Set());
-  const fileInputRef = useRef(null);
+  const [categoryChanges, setCategoryChanges] = useState({});
 
-  const handleNodeSelect = useCallback((node) => {
-    setSelectedNode(node);
-    const nodeProducts = modifiedProducts.filter(product => 
-      product.menuItems.some(item => item.textId === node)
-    );
-    
-    if (nodeProducts.length > 0) {
-      const sorted = nodeProducts.sort((a, b) => {
-        // Najpierw porównujemy priorytety
-        const aPriority = a.menuItems.find(item => item.textId === node)?.level || 0;
-        const bPriority = b.menuItems.find(item => item.textId === node)?.level || 0;
-        
-        if (bPriority !== aPriority) {
-          return bPriority - aPriority; // Wyższy priorytet na górze
-        }
-        
-        // Jeśli priorytety są równe, sortujemy po ID (wyższe ID wyżej)
-        return parseInt(b.id) - parseInt(a.id);
-      });
-      
-      setFilteredProducts([...sorted]);
-    } else {
-      setFilteredProducts([]);
-    }
-  }, [modifiedProducts]);
-
-  const handleProductsReorder = useCallback((newProducts) => {
-    if (!selectedNode) return;
-
-    console.log('Selected node:', selectedNode);
-    console.log('Modified nodes before:', [...modifiedNodes]);
-
-    setModifiedNodes(prev => {
-      const newNodes = new Set([...prev, selectedNode]);
-      console.log('Current node path:', selectedNode);
-      
-      if (selectedNode === 'SKLEP' || selectedNode === 'SKLEP\\Zobacz Wszystko') {
-        const relatedNode = selectedNode === 'SKLEP' ? 'SKLEP\\Zobacz Wszystko' : 'SKLEP';
-        newNodes.add(relatedNode);
-      }
-      if (selectedNode.endsWith('\\Kamizelki')) {
-        console.log('Adding Kamizelki node');
-        newNodes.add(selectedNode);
-      }
-      
-      console.log('Modified nodes after:', [...newNodes]);
-      return newNodes;
-    });
-
-    const startPriority = 930;
-    
-    setModifiedProducts(prevProducts => {
-      const updatedProducts = [...prevProducts];
-      
-      newProducts.forEach((product, index) => {
-        const productIndex = updatedProducts.findIndex(p => p.id === product.id);
-        if (productIndex === -1) return;
-        
-        const newPriority = startPriority - index;
-        
-        console.log('Product before update:', {
-          id: product.id,
-          menuItems: updatedProducts[productIndex].menuItems.map(i => ({
-            textId: i.textId,
-            level: i.level
-          }))
-        });
-        
-        updatedProducts[productIndex] = {
-          ...updatedProducts[productIndex],
-          menuItems: updatedProducts[productIndex].menuItems.map(item => {
-            if (item.textId === selectedNode) {
-              console.log(`Updating priority for ${product.id} in node ${selectedNode} to ${newPriority}`);
-              return { ...item, level: newPriority };
-            }
-            if ((selectedNode === 'SKLEP' && item.textId === 'SKLEP\\Zobacz Wszystko') ||
-                (selectedNode === 'SKLEP\\Zobacz Wszystko' && item.textId === 'SKLEP')) {
-              return { ...item, level: newPriority };
-            }
-            return item;
-          })
-        };
-
-        console.log('Product after update:', {
-          id: product.id,
-          menuItems: updatedProducts[productIndex].menuItems.map(i => ({
-            textId: i.textId,
-            level: i.level
-          }))
-        });
-      });
-
-      console.log('Updated products:', updatedProducts.map(p => ({
-        id: p.id,
-        menuItems: p.menuItems.map(i => ({
-          textId: i.textId,
-          level: i.level
-        }))
-      })));
-
-      return updatedProducts;
-    });
-
-    const updatedFilteredProducts = newProducts.map((product, index) => ({
-      ...product,
-      menuItems: product.menuItems.map(item => {
-        if (item.textId === selectedNode) {
-          return {
-            ...item,
-            level: startPriority - index
-          };
-        }
-        if ((selectedNode === 'SKLEP' && item.textId === 'SKLEP\\Zobacz Wszystko') ||
-            (selectedNode === 'SKLEP\\Zobacz Wszystko' && item.textId === 'SKLEP')) {
-          return {
-            ...item,
-            level: startPriority - index
-          };
-        }
-        return item;
-      })
-    })).sort((a, b) => {
-      const aPriority = a.menuItems.find(item => item.textId === selectedNode)?.level || 0;
-      const bPriority = b.menuItems.find(item => item.textId === selectedNode)?.level || 0;
-      
-      if (bPriority !== aPriority) {
-        return bPriority - aPriority;
-      }
-      
-      return parseInt(b.id) - parseInt(a.id);
-    });
-
-    setFilteredProducts(updatedFilteredProducts);
-  }, [selectedNode, modifiedNodes]);
-
-  const handleSave = () => {
+  const loadProducts = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
     try {
-      if (!modifiedProducts.length) {
-        throw new Error('Brak produktów do zapisania');
+      const idoSellService = new IdoSellService();
+      const products = await idoSellService.getProducts();
+      
+      // Sprawdź duplikaty przed transformacją
+      const idCounts = {};
+      products.forEach(p => {
+        idCounts[p.productId] = (idCounts[p.productId] || 0) + 1;
+      });
+      
+      const duplicates = Object.entries(idCounts)
+        .filter(([_, count]) => count > 1)
+        .map(([id]) => id);
+      
+      if (duplicates.length > 0) {
+        console.warn('Znaleziono duplikaty ID:', duplicates);
       }
 
-      let currentXML = modifiedProducts[0].__originalXML;
-      const allNodes = [...modifiedNodes];
+      const transformedProducts = products.map(product => ({
+        id: product.productId,
+        iconUrl: product.productIcon?.productIconLargeUrl || product.productIcon?.productIconSmallUrl,
+        codeOnCard: product.productDisplayedCode,
+        menuItems: product.productMenu.map(menu => {
+          const polishDesc = menu.menuItemDescriptionsLangData.find(
+            lang => lang.langId === 'pol'
+          );
+          return {
+            textId: polishDesc?.menuItemTextId || '',
+            name: polishDesc?.menuItemName || '',
+            level: product.productPriority,
+            menuItemId: menu.menuItemId
+          };
+        })
+      }));
 
-      // Generujemy XML tylko raz, przekazując wszystkie zmodyfikowane węzły
-      currentXML = generateNewXML(
-        [{ __originalXML: currentXML }],
-        modifiedProducts,
-        allNodes
+      setProducts(transformedProducts);
+      setModifiedProducts(transformedProducts);
+      
+      const allNodes = Array.from(new Set(
+        transformedProducts.flatMap(p => p.menuItems.map(i => i.textId))
+      )).sort();
+      setNodes(allNodes);
+    } catch (error) {
+      console.error('Błąd podczas ładowania produktów:', error);
+      setError('Wystąpił błąd podczas ładowania produktów');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const handleSave = async () => {
+    try {
+      const updates = modifiedProducts.flatMap(product => 
+        product.menuItems.map(item => ({
+          productId: product.id,
+          nodeId: item.menuItemId,
+          priority: item.level
+        }))
       );
 
-      const blob = new Blob([currentXML], { type: 'text/xml' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'updated_products.xml';
-      a.click();
-      window.URL.revokeObjectURL(url);
-
-      setModifiedNodes(new Set());
+      const idoSellService = new IdoSellService();
+      
+      if (window.confirm('Czy na pewno chcesz zapisać zmiany?')) {
+        await idoSellService.updateProductPriorities(updates);
+        setProducts(prev => {
+          const updated = [...prev];
+          modifiedProducts.forEach(modifiedProduct => {
+            const index = updated.findIndex(p => p.id === modifiedProduct.id);
+            if (index !== -1) {
+              updated[index] = modifiedProduct;
+            }
+          });
+          return updated;
+        });
+        alert('Zmiany zostały zapisane');
+      }
     } catch (error) {
       console.error('Błąd podczas zapisywania:', error);
-      alert(error.message || 'Wystąpił błąd podczas zapisywania pliku.');
+      alert('Wystąpił błąd podczas zapisywania zmian');
     }
   };
 
-  const handleFileUpload = async (event) => {
-    const file = event.target.files[0];
-    if (file) {
-      try {
-        const text = await file.text();
-        const { products: parsedProducts, menuNodes } = await parseXMLFile(text, true);
-        setProducts(parsedProducts);
-        setModifiedProducts(parsedProducts);
-        setNodes(menuNodes);
-        setSelectedNode(null);
-        setFilteredProducts([]);
-        setModifiedNodes(new Set());
-        event.target.value = '';
-      } catch (error) {
-        console.error('Błąd podczas wczytywania pliku:', error);
-        alert('Wystąpił błąd podczas wczytywania pliku XML');
-        event.target.value = '';
-      }
+  const handleNodeSelect = (node) => {
+    setSelectedNode(node);
+    if (categoryChanges[node]) {
+      setModifiedProducts(categoryChanges[node]);
+    } else {
+      setModifiedProducts(products);
     }
   };
 
-  useEffect(() => {
+  const handleProductsReorder = useCallback((reorderedProducts) => {
+    console.log('Aktualizacja kolejności produktów:', reorderedProducts);
+    setModifiedProducts(reorderedProducts);
     if (selectedNode) {
-      handleNodeSelect(selectedNode);
+      setCategoryChanges(prev => ({
+        ...prev,
+        [selectedNode]: reorderedProducts
+      }));
     }
-  }, [selectedNode, handleNodeSelect]);
+  }, [selectedNode]);
+
+  const filteredProducts = selectedNode
+    ? modifiedProducts.filter(product => 
+        product.menuItems.some(item => item.textId === selectedNode)
+      )
+    : [];
 
   return (
-    <AppContainer>
-      <SidebarContainer>
-        <FileInput 
-          type="file" 
-          ref={fileInputRef}
-          accept=".xml"
-          onChange={handleFileUpload}
-        />
-        <ActionButton 
-          variant="secondary"
-          onClick={() => fileInputRef.current?.click()}
-        >
-          {products ? 'Wgraj nowy plik XML' : 'Wgraj plik XML'}
-        </ActionButton>
-        {products && (
-          <>
-            <MenuSelector 
-              nodes={nodes}
-              activeNode={selectedNode}
-              onSelect={handleNodeSelect}
-            />
-            <ActionButton 
-              variant="primary"
-              onClick={handleSave}
-              disabled={!selectedNode || filteredProducts.length === 0}
-            >
-              Zapisz kolejność
-            </ActionButton>
-          </>
-        )}
-      </SidebarContainer>
-      <MainContent>
-        {!products ? (
-          <InitialMessage>
-            Wgraj plik XML aby rozpocząć pracę
-          </InitialMessage>
-        ) : selectedNode ? (
-          <ProductGrid 
-            products={filteredProducts} 
-            onProductsReorder={handleProductsReorder}
-            selectedNode={selectedNode}
+    <>
+      <TestModeIndicator>
+        TRYB TESTOWY - Zmiany nie będą zapisywane w sklepie
+      </TestModeIndicator>
+      {isLoading && (
+        <LoadingIndicator>
+          Ładowanie produktów...
+        </LoadingIndicator>
+      )}
+      <AppContainer>
+        <SidebarContainer>
+          <FileInput 
+            type="file" 
+            ref={fileInputRef}
+            accept=".xml"
+            onChange={() => {}} // tymczasowo puste
           />
-        ) : (
-          <InitialMessage>
-            Wybierz kategorię z menu po lewej stronie
-          </InitialMessage>
-        )}
-      </MainContent>
-    </AppContainer>
-  );
-}
+          <ActionButton 
+            variant="secondary"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            {products.length ? 'Wgraj nowy plik XML' : 'Wgraj plik XML'}
+          </ActionButton>
 
-export default App;
+          <ActionButton 
+            variant="secondary"
+            onClick={loadProducts}
+            disabled={isLoading}
+          >
+            {isLoading ? 'Ładowanie...' : 'Pobierz produkty z API'}
+          </ActionButton>
+
+          {products.length > 0 && (
+            <>
+              <MenuSelector 
+                nodes={nodes}
+                activeNode={selectedNode}
+                onSelect={handleNodeSelect}
+              />
+              <ActionButton 
+                variant="primary"
+                onClick={handleSave}
+                disabled={!selectedNode || filteredProducts.length === 0}
+              >
+                Zapisz kolejność
+              </ActionButton>
+            </>
+          )}
+
+          {error && (
+            <ErrorMessage>
+              {error}
+            </ErrorMessage>
+          )}
+        </SidebarContainer>
+
+        <MainContent>
+          {!products.length ? (
+            <InitialMessage>
+              Wgraj plik XML lub pobierz produkty z API aby rozpocząć pracę
+            </InitialMessage>
+          ) : selectedNode ? (
+            <ProductGrid 
+              products={filteredProducts} 
+              onProductsReorder={handleProductsReorder}
+              selectedNode={selectedNode}
+            />
+          ) : (
+            <InitialMessage>
+              Wybierz kategorię z menu po lewej stronie
+            </InitialMessage>
+          )}
+        </MainContent>
+      </AppContainer>
+    </>
+  );
+};
+
+export default App; 
