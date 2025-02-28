@@ -1,0 +1,15 @@
+{
+  "name": "idosell-proxy-server",
+  "version": "1.0.0",
+  "description": "Serwer proxy dla API IdoSell",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.17.1",
+    "http-proxy-middleware": "^2.0.6",
+    "cors": "^2.8.5",
+    "body-parser": "^1.19.0"
+  }
+} 
